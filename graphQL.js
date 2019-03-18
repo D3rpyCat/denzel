@@ -8,9 +8,9 @@ const {
   buildASTSchema
 } = require("graphql");
 
-const result = dotenv.config();
-if (result.error) {
-  throw result.error;
+const movie = dotenv.config();
+if (movie.error) {
+  throw movie.error;
 }
 
 /* eslint-disable no-console, no-process-exit */
@@ -24,31 +24,41 @@ const DATABASE_NAME = "IMDB"
 //GraphQL schema
 const schema = buildASTSchema(gql `
   type Query {
-    hello: String
-    populate: String
+    populate: Populate
     random: Movie
-    movies: [Movie]
-    movie: Movie
+    getMovie(id: String) : Movie
+    getMovies(metascore: Int, limit: Int): [Movie]
+    postReview(id: String, review: Review): Movie
   },
   type Movie {
-  link: String
-  metascore: Int
-  synopsis: String
-  title: String
-  year: Int
+    link: String
+    id: String
+    metascore: Int
+    poster: String
+    rating: Float
+    synopsis: String
+    title: String
+    votes: Float
+    year: Int
+    date: String
+    review: String
+  },
+  type Populate{
+    total: String
+  },
+  input Review{
+    date: String
+    review: String
   }
 `)
 
 const root = {
-  hello: () => "Hello!",
   populate: async (source, args) => {
     const movies = await populate(DENZEL_IMDB_ID);
-    collection.insertMany(movies, (error, result) => {
-      if (error) {
-        return error;
-      }
-      return result.result.n;
-    });
+    const insertion = await collection.insertMany(movies);
+    return {
+      total: insertion.movie.n
+    };
   },
   random: async () => {
     let query = {
@@ -62,24 +72,49 @@ const root = {
       "limit": 1,
       "skip": random
     }
-    collection.findOne(query, options, (error, result) => {
-      if (error) {
-        return error;
-      }
-      return new Movie(result.link, result.metascore, result.synopsis, result.title, result.year);
-    })
+    const movie = await collection.findOne(query, options);
+    return {
+      link: movie.link,
+      metascore: movie.metascore,
+      synopsis: movie.synopsis,
+      title: movie.title,
+      year: movie.year
+    };
   },
-  movie: (source, args) => {},
-  movies: (source, args) => {},
-}
-
-class Movie {
-  constructor(link, metascore, synopsis, title, year) {
-    this.link = link;
-    this.metascore = metascore;
-    this.synopsis = synopsis;
-    this.title = title;
-    this.year = year;
+  getMovie: async (args) => {
+    const movie = await collection.findOne({
+      "id": args.id
+    });
+    return movie;
+  },
+  getMovies: async (args) => {
+    let query = {
+      "metascore": {
+        $gte: args.metascore
+      }
+    };
+    let options = {
+      "limit": args.limit,
+      "sort": [
+        ['metascore', 'desc']
+      ]
+    };
+    const movies = await collection.find(query, options).toArray();
+    return movies;
+  },
+  postReview: async (args) => {
+    let selector = {
+      "id": args.id
+    };
+    let document = {
+      $set: args.review
+    };
+    let options = {
+      "upsert": true
+    };
+    const post = await collection.updateMany(selector, document, options)
+    const modified = await collection.findOne(selector);
+    return modified;
   }
 }
 
