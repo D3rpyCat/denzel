@@ -73,13 +73,7 @@ const root = {
       "skip": random
     }
     const movie = await collection.findOne(query, options);
-    return {
-      link: movie.link,
-      metascore: movie.metascore,
-      synopsis: movie.synopsis,
-      title: movie.title,
-      year: movie.year
-    };
+    return movie;
   },
   getMovie: async (args) => {
     const movie = await collection.findOne({
